@@ -7,7 +7,7 @@ const port = process.env.PORT || 3000;
 app.use(express.json())
 app.use(cors())
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = process.env.DATABASE_URI;
 
 const client = new MongoClient(uri, {
@@ -40,6 +40,22 @@ async function run() {
             res.send(result)
         })
 
+        app.get('/movies/:id', async (req, res) => {
+            const id = req.params.id;
+            if (!ObjectId.isValid(id)) {
+                return res.status(400).send({
+                    message: 'Invalid product id'
+                });
+            }
+            const result = await movieCollection.findOne({_id: new ObjectId(id)});
+            if (!result) {
+                return res.status(404).send({
+                    message: 'Product not found'
+                });
+            }
+            res.send(result)
+        })
+
         app.get('/top-movies', async (req, res) => {
             const result = await movieCollection.find().sort({ rating: -1 })
                 .limit(6).toArray();
@@ -51,7 +67,7 @@ async function run() {
                 .limit(6).toArray();
             res.send(result)
         })
-        
+
         app.listen(port, () => {
             console.log(`Example app listening on port ${port}`);
         });
