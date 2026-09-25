@@ -214,15 +214,17 @@ async function run() {
             }
         });
 
-        app.listen(port, () => {
-            console.log(`Example app listening on port ${port}`);
-        });
+        // app.listen(port, () => {
+        //     console.log(`Example app listening on port ${port}`);
+        // });
     }
     catch (err) {
         console.error(err)
     }
 }
 run().catch(console.dir);
+
+module.exports = app;
 
 
 
