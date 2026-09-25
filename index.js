@@ -24,16 +24,84 @@ async function run() {
 
         const db = client.db('movie_master');
         const movieCollection = db.collection('moviesDb')
+        const userCollection = db.collection('users');
 
         app.get('/', (req, res) => {
             res.send('Hello World!');
         });
 
+        app.get('/statistics', async (req, res) => {
+            const totalMovies = await movieCollection.countDocuments();
+            const totalUsers = await userCollection.countDocuments();
+            res.send({
+                totalMovies,
+                totalUsers
+            });
+        });
+        app.post('/users', async (req, res) => {
+            const user = req.body;
+            const existingUser = await userCollection.findOne({
+                email: user.email
+            });
+            if (existingUser) {
+                return res.send({
+                    message: "User already exists"
+                });
+            }
+            const result = await userCollection.insertOne(user);
+            res.send(result);
+        });
+
         app.post('/movies', async (req, res) => {
-            const newMovie = req.body;
-            const result = await movieCollection.insertOne(newMovie)
-            res.send(result)
-        })
+            try {
+                const newMovie = req.body;
+                const existingMovie = await movieCollection.findOne({
+                    title: newMovie.title,
+                    releaseYear: newMovie.releaseYear
+                });
+                if (existingMovie) {
+                    return res.status(409).send({
+                        message: "Movie already exists!"
+                    });
+                }
+                const result = await movieCollection.insertOne(newMovie);
+                res.status(201).send(result);
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({
+                    message: "Failed to add movie"
+                });
+            }
+        });
+
+        app.patch('/movies/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+                const updatedMovie = req.body;
+                const result = await movieCollection.updateOne(
+                    {
+                        _id: new ObjectId(id)
+                    },
+                    {
+                        $set: updatedMovie
+                    }
+                );
+
+                if (result.matchedCount === 0) {
+                    return res.status(404).send({
+                        message: "Movie not found"
+                    });
+                }
+                res.send({
+                    message: "Movie updated successfully"
+                });
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({
+                    message: "Failed to update movie"
+                });
+            }
+        });
 
         app.get('/movies', async (req, res) => {
             const result = await movieCollection.find().toArray();
@@ -44,13 +112,13 @@ async function run() {
             const id = req.params.id;
             if (!ObjectId.isValid(id)) {
                 return res.status(400).send({
-                    message: 'Invalid product id'
+                    message: 'Invalid movie id'
                 });
             }
             const result = await movieCollection.findOne({_id: new ObjectId(id)});
             if (!result) {
                 return res.status(404).send({
-                    message: 'Product not found'
+                    message: 'Movie not found'
                 });
             }
             res.send(result)
