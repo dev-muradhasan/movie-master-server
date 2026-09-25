@@ -25,6 +25,7 @@ async function run() {
         const db = client.db('movie_master');
         const movieCollection = db.collection('moviesDb')
         const userCollection = db.collection('users');
+        const watchlistCollection = db.collection("watchlist");
 
         app.get('/', (req, res) => {
             res.send('Hello World!');
@@ -86,7 +87,6 @@ async function run() {
                         $set: updatedMovie
                     }
                 );
-
                 if (result.matchedCount === 0) {
                     return res.status(404).send({
                         message: "Movie not found"
@@ -103,10 +103,20 @@ async function run() {
             }
         });
 
-        app.get('/movies', async (req, res) => {
-            const result = await movieCollection.find().toArray();
-            res.send(result)
-        })
+        app.get("/movies", async (req, res) => {
+            try {
+                const email = req.query.email;
+                const query = email ? { addedBy: email }
+                    : {};
+                const result = await movieCollection.find(query).toArray();
+                res.send(result);
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({
+                    message: "Failed to fetch movies"
+                });
+            }
+        });
 
         app.get('/movies/:id', async (req, res) => {
             const id = req.params.id;
@@ -115,7 +125,7 @@ async function run() {
                     message: 'Invalid movie id'
                 });
             }
-            const result = await movieCollection.findOne({_id: new ObjectId(id)});
+            const result = await movieCollection.findOne({ _id: new ObjectId(id) });
             if (!result) {
                 return res.status(404).send({
                     message: 'Movie not found'
@@ -135,6 +145,74 @@ async function run() {
                 .limit(6).toArray();
             res.send(result)
         })
+
+        app.post("/watchlist", async (req, res) => {
+            try {
+                const watchlistMovie = req.body;
+                const existing = await watchlistCollection.findOne({
+                    movieId: watchlistMovie.movieId,
+                    addedBy: watchlistMovie.addedBy,
+                });
+                if (existing) {
+                    return res.status(409).send({
+                        message: "Movie already in watchlist!",
+                    });
+                }
+                const result = await watchlistCollection.insertOne(
+                    watchlistMovie
+                );
+                res.status(201).send(result);
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({
+                    message: "Failed to add to watchlist",
+                });
+            }
+        });
+
+        app.delete("/watchlist", async (req, res) => {
+            try {
+                const { movieId, email } = req.query;
+                const result = await watchlistCollection.deleteOne({
+                    movieId: movieId,
+                    addedBy: email,
+                });
+                if (result.deletedCount === 0) {
+                    return res.status(404).send({
+                        message: "Movie not found in watchlist!",
+                    });
+                }
+                res.send({
+                    message: "Movie removed from watchlist!",
+                });
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({
+                    message: "Failed to remove from watchlist",
+                });
+            }
+        });
+
+        app.get("/watchlist", async (req, res) => {
+            try {
+                const email = req.query.email;
+                const watchlist = await watchlistCollection.find({ addedBy: email }).toArray();
+                const movieIds = watchlist.map((item) => item.movieId);
+                const movies = await movieCollection
+                    .find({
+                        _id: {
+                            $in: movieIds.map((id) => new ObjectId(id))
+                        }
+                    })
+                    .toArray();
+                res.send(movies);
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({
+                    message: "Failed to fetch watchlist"
+                });
+            }
+        });
 
         app.listen(port, () => {
             console.log(`Example app listening on port ${port}`);
